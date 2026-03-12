@@ -1,4 +1,4 @@
-#vim: shiftwidth=0 tabstop=4 expandtab
+# vim: shiftwidth=0 tabstop=4 expandtab
 system: pkgs:
 let
 
@@ -35,6 +35,8 @@ in
             anoremenu PopUp.Inspect      :lua vim.lsp.buf.hover()<CR>
             anoremenu PopUp.Code\ Action :lua vim.lsp.buf.code_action()<CR>
             anoremenu PopUp.References   :lua vim.lsp.buf.references()<CR>
+            nnoremap gD :lua vim.lsp.buf.definition()<CR>
+            nnoremap <C-Space> :lua vim.lsp.buf.code_action()<CR>
             " > $out/etc/lsp/gopls/enable.vim
             ${MKDIR} -p $out/bin
             printf "\
