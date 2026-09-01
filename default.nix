@@ -26,44 +26,52 @@ in derivation {
         ${CP} ${lspconfig-gopls} $out/etc/lsp/gopls.lua
         ${MKDIR} -p $out/etc/lsp/gopls
         VERSION=$(${GOPLS} version)
-        printf "\
+
+        printf >$out/etc/lsp/gopls/enable.lua "\
         vim.print('Enabling Go Language Server: $VERSION')
         vim.lsp.enable('gopls')
-        " > $out/etc/lsp/gopls/enable.lua
+        "
 
-        printf "\
+        printf >$out/etc/lsp/gopls/lint.lua "\
         local lint = require('lint')
         lint.linters_by_ft = {
             go = { 'golangcilint' }
         }
-        vim.api.nvim_create_autocmd({ 'BufWinEnter', 'InsertLeave' }, {
+        function try_lint()
+            local bufpath = vim.api.nvim_buf_get_name(0)
+            local modfile = vim.fs.find('go.mod', { path = bufpath, upward = true })[1]
+            local cwd = modfile and vim.fs.dirname(modfile) or nil
+            lint.try_lint(nil, { cwd = cwd })
+        end
+        vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufWritePost' }, { callback = try_lint })
+        vim.api.nvim_create_autocmd({ 'InsertLeave', 'TextChanged' }, {
             callback = function()
-                local bufpath = vim.api.nvim_buf_get_name(0)
-                local modfile = vim.fs.find('go.mod', { path = bufpath, upward = true })[1]
-                local cwd = modfile and vim.fs.dirname(modfile) or nil
-                lint.try_lint(nil, { cwd = cwd })
+                if vim.bo.modified then
+                    vim.cmd('silent! update')
+                    try_lint()
+                end
             end
         })
-        " > $out/etc/lsp/gopls/lint.lua
+        "
 
-        printf "\
+        printf >$out/etc/lsp/gopls/enable.vim "\
         anoremenu PopUp.-LSP- <NOP>
         anoremenu PopUp.Inspect      :lua vim.lsp.buf.hover()<CR>
         anoremenu PopUp.Code\ Action :lua vim.lsp.buf.code_action()<CR>
         anoremenu PopUp.References   :lua vim.lsp.buf.references()<CR>
         nnoremap gD :lua vim.lsp.buf.definition({reuse_win = true})<CR>
         nnoremap <C-Space> :lua vim.lsp.buf.code_action()<CR>
-        " > $out/etc/lsp/gopls/enable.vim
+        "
 
         ${MKDIR} -p $out/bin
-        printf "\
+        printf >$out/bin/neovim-go "\
         #!${BASH}
         export PATH=\$PATH:${pkgs.go}/bin:${pkgs.gopls}/bin:${pkgs.golangci-lint}/bin
         exec ${NEOVIM} \
             --cmd \"set runtimepath+=$out/etc,${NVIM_LINT}\" \
             --cmd \"runtime! lsp/gopls/enable.lua lsp/gopls/lint.lua lsp/gopls/enable.vim\" \
             \"\$@\"
-        " > $out/bin/neovim-go
+        "
         ${CHMOD} +x $out/bin/neovim-go
         '';
 }
