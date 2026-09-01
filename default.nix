@@ -3,14 +3,14 @@
 , pkgs ? import <nixpkgs> {} }:
 let
 
-BASH   = "${pkgs.bash}/bin/bash";
-CHMOD  = "${pkgs.coreutils}/bin/chmod";
-CP     = "${pkgs.coreutils}/bin/cp";
-GOPLS  = "${pkgs.gopls}/bin/gopls";
-LINT   = "${pkgs.golangci-lint}/bin/golangci-lint";
-LN     = "${pkgs.coreutils}/bin/ln";
-MKDIR  = "${pkgs.coreutils}/bin/mkdir";
-NEOVIM = "${pkgs.neovim}/bin/nvim";
+BASH      = "${pkgs.bash}/bin/bash";
+CHMOD     = "${pkgs.coreutils}/bin/chmod";
+CP        = "${pkgs.coreutils}/bin/cp";
+GOPLS     = "${pkgs.gopls}/bin/gopls";
+LN        = "${pkgs.coreutils}/bin/ln";
+MKDIR     = "${pkgs.coreutils}/bin/mkdir";
+NEOVIM    = "${pkgs.neovim}/bin/nvim";
+NVIM_LINT = "${pkgs.vimPlugins.nvim-lint}";
 
 lspconfig-gopls =
     let rev = "030a72f0aa4d56f9e8ff67921e6e3ffd0e97bf07";
@@ -24,35 +24,27 @@ in derivation {
     builder = pkgs.writeShellScript "configure-neovim-go" ''
         ${MKDIR} -p $out/etc/lsp
         ${CP} ${lspconfig-gopls} $out/etc/lsp/gopls.lua
-
         ${MKDIR} -p $out/etc/lsp/gopls
         VERSION=$(${GOPLS} version)
-        printf >$out/etc/lsp/gopls/enable.lua "\
-        vim.print('Enabling Go Language Server: $(${GOPLS} version), $(${LINT} version)')
-        vim.lsp.config('golangci_lint', {
-            cmd = { 'golangci-lint-langserver' },
-            filetypes = { 'go', 'gomod' },
-            root_markers = { '.golangci.yaml' },
-            init_options = {
-                command = {
-                    'golangci-lint',
-                    'run',
-                    '--output.json.path=stdout',
-                    '--show-stats=false',
-                }
-            },
-            handlers = {
-                ["textDocument/publishDiagnostics"] = function(err, result, ctx, config)
-                    if result and result.uri then
-                        vim.print("golangci-lint URI: " .. result.uri)
-                    end
-                    vim.lsp.handlers["textDocument/publishDiagnostics"](err, result, ctx, config)
-                end
-            }
-        })
+        printf "\
+        vim.print('Enabling Go Language Server: $VERSION')
         vim.lsp.enable('gopls')
-        vim.lsp.enable('golangci_lint')
-        "
+        " > $out/etc/lsp/gopls/enable.lua
+
+        printf "\
+        local lint = require('lint')
+        lint.linters_by_ft = {
+            go = { 'golangcilint' }
+        }
+        vim.api.nvim_create_autocmd({ 'BufWinEnter', 'InsertLeave' }, {
+            callback = function()
+                local bufpath = vim.api.nvim_buf_get_name(0)
+                local modfile = vim.fs.find('go.mod', { path = bufpath, upward = true })[1]
+                local cwd = modfile and vim.fs.dirname(modfile) or nil
+                lint.try_lint(nil, { cwd = cwd })
+            end
+        })
+        " > $out/etc/lsp/gopls/lint.lua
 
         printf "\
         anoremenu PopUp.-LSP- <NOP>
@@ -66,10 +58,10 @@ in derivation {
         ${MKDIR} -p $out/bin
         printf "\
         #!${BASH}
-        export PATH=\$PATH:${pkgs.go}/bin:${pkgs.gopls}/bin:${pkgs.golangci-lint}/bin:${pkgs.golangci-lint-langserver}/bin
+        export PATH=\$PATH:${pkgs.go}/bin:${pkgs.gopls}/bin:${pkgs.golangci-lint}/bin
         exec ${NEOVIM} \
-            --cmd \"set runtimepath+=$out/etc\" \
-            --cmd \"runtime! lsp/gopls/enable.lua lsp/gopls/enable.vim\" \
+            --cmd \"set runtimepath+=$out/etc,${NVIM_LINT}\" \
+            --cmd \"runtime! lsp/gopls/enable.lua lsp/gopls/lint.lua lsp/gopls/enable.vim\" \
             \"\$@\"
         " > $out/bin/neovim-go
         ${CHMOD} +x $out/bin/neovim-go
