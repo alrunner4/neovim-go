@@ -14,9 +14,9 @@ NVIM_LINT = "${pkgs.vimPlugins.nvim-lint}";
 
 lspconfig-gopls =
     let rev = "030a72f0aa4d56f9e8ff67921e6e3ffd0e97bf07";
-    in pkgs.fetchurl {
+    in builtins.fetchurl {
         url = "https://raw.githubusercontent.com/neovim/nvim-lspconfig/${rev}/lsp/gopls.lua";
-        hash = "sha256-Wyum8WuvpfBA2YeAlqzecMluitTWzSBb4XTS3k3P3wQ="; };
+        sha256 = "sha256-Wyum8WuvpfBA2YeAlqzecMluitTWzSBb4XTS3k3P3wQ="; };
 
 in derivation {
     inherit system;
